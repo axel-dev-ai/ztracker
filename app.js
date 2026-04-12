@@ -58,22 +58,11 @@ const defaultState = {
   settingsOpen: false,
   insightModal: null,
   focusItem: null,
-  entries: [
-    { id: crypto.randomUUID(), type: "income", date: todayISO(), category: "Salary", label: "Salary", note: "Sample income", amount: 12000 },
-    { id: crypto.randomUUID(), type: "expense", date: todayISO(), category: "Food", label: "Food", note: "Sample expense", amount: 350 }
-  ],
-  bills: [
-    { id: crypto.randomUUID(), name: "Internet", amount: 1499, dueDate: todayISO(), status: "Unpaid", category: "Utility", note: "Monthly internet", recurring: false }
-  ],
-  savings: [
-    { id: crypto.randomUUID(), date: todayISO(), label: "Emergency fund", amount: 1000, note: "Starter savings" }
-  ],
-  accounts: [
-    { id: crypto.randomUUID(), name: "GCash 1", balance: 0, type: "E-wallet", note: "" }
-  ],
-  budgets: [
-    { id: crypto.randomUUID(), month: monthKey(todayISO()), category: "Food", limit: 3000 }
-  ],
+  entries: [],
+  bills: [],
+  savings: [],
+  accounts: [],
+  budgets: [],
   expenseCategories: ["Food","Transport","Utilities","Rent","Shopping","Health","School","Other"],
   incomeCategories: ["Salary","Allowance","Side Job","Freelance","Gift","Other"],
   billCategories: ["Utility","Loan","Subscription","Rent","School","Other"],
@@ -97,24 +86,68 @@ if (!currentProfile) {
 }
 
 function saveProfiles() {
-  profiles[currentProfile] = structuredClone(defaultState);
+  if (currentProfile) {
+    profiles[currentProfile] = state;
+    localStorage.setItem("ztracker_current_profile", currentProfile);
+  } else {
+    localStorage.removeItem("ztracker_current_profile");
+  }
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profiles));
-  localStorage.setItem("ztracker_current_profile", currentProfile);
 }
 
 // override saveState
 
 // profile UI inject
-function renderProfileSelector(){
+function renderProfileSelectorInline(){
   return `
-  <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;">
-    <select id="profileSelect">
-      ${Object.keys(profiles).map(p => `<option ${p===currentProfile?"selected":""}>${p}</option>`).join("")}
-    </select>
-    <button id="addProfileBtn" class="btn small">+</button>
+  <div class="header-profile-bar">
+    <div class="select-wrap">
+      <select id="profileSelect">
+        ${getProfileNames().map(p => `<option value="${p}" ${p===currentProfile?"selected":""}>${p}</option>`).join("")}
+      </select>
+    </div>
+    <button id="addProfileBtn" class="btn small" type="button">+</button>
   </div>`;
 }
 
+
+function renderProfileLaunch() {
+  const names = getProfileNames();
+  return `
+    <div class="shell">
+      <div class="profile-launch">
+        <div class="profile-launch-header">
+          <div class="profile-launch-icon"><img src="icons/icon-192.png" alt="Ztracker icon" /></div>
+          <div class="profile-launch-title">
+            <h1>Ztracker</h1>
+            <p>Choose a profile to continue.</p>
+          </div>
+        </div>
+        ${names.length ? `
+          <div class="profile-grid">
+            ${names.map(name => `
+              <button class="profile-card" type="button" data-pick-profile="${name}">
+                <h3>${name}</h3>
+                <p>Open this profile</p>
+              </button>
+            `).join("")}
+          </div>
+        ` : `
+          <div class="empty">
+            <div style="font-size:26px;font-weight:900">No profiles yet</div>
+            <div class="muted" style="margin-top:8px">Create your first profile to start using Ztracker.</div>
+          </div>
+        `}
+        <div class="profile-actions">
+          <div class="inline-input">
+            <input id="newProfileName" placeholder="Enter profile name" />
+            <button id="createFirstProfileBtn" class="btn" type="button">Add Profile</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 
 
@@ -368,6 +401,11 @@ function recentCard(item) { return `<div class="history-item clickable" data-nav
 function reminderCard(item) { return `<div class="notice clickable ${item.dueInfo.type}" data-reminder-id="${item.id}"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><div style="font-weight:900;font-size:22px">${escapeHtml(item.name)}</div><div class="muted">Due date: ${item.dueDate}</div><div class="muted">${escapeHtml(item.category)}</div></div><div style="text-align:right"><div style="font-weight:900">${peso.format(item.amount)}</div><div class="badge ${item.dueInfo.type}">${item.dueInfo.text}</div></div></div></div>`; }
 
 function render() {
+  if (!currentProfile) {
+    document.getElementById("app").innerHTML = renderProfileLaunch();
+    bindProfileLaunchEvents();
+    return;
+  }
   ensureRecurringBills();
   const app = document.getElementById("app");
   const m = computeMonth();
@@ -380,7 +418,7 @@ function render() {
   const calendar = calendarCells(state.selectedMonth);
 
   app.innerHTML = `
-    <div class="shell">${renderProfileSelector()}"+renderProfileSelector()+"
+    <div class="shell">
       <div id="installBanner" class="install-banner ${deferredPrompt ? "show" : ""}">
         <div><h4>Install Ztracker</h4><p>Add it to your home screen for a real app feel.</p></div>
         <button id="installBtn" class="btn">Install</button>
@@ -597,6 +635,20 @@ function render() {
           </div>
 
           <div class="settings-section">
+            <h3>Profiles</h3>
+            <div class="muted">Switch profiles here or choose again on launch.</div>
+            <div class="profile-actions" style="margin-top:12px">
+              <div class="select-wrap" style="min-width:190px">
+                <select id="settingsProfileSelect">
+                  ${getProfileNames().map(p => `<option value="${p}" ${p === currentProfile ? "selected" : ""}>${p}</option>`).join("")}
+                </select>
+              </div>
+              <button class="btn ghost small" id="settingsSwitchProfileBtn" type="button">Switch</button>
+              <button class="btn ghost small" id="settingsExitProfileBtn" type="button">Choose on launch</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
             <h3>Customization</h3>
             <div class="muted">Dashboard reorder and hide/show controls can go here in the next update.</div>
           </div>
@@ -642,6 +694,20 @@ function render() {
             </div>
             <div style="margin-top:12px"><input id="bgImageInput" type="file" accept="image/*" /></div>
             <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" id="clearBgBtn">Reset Settings</button></div>
+          </div>
+
+          <div class="settings-section">
+            <h3>Profiles</h3>
+            <div class="muted">Switch profiles here or choose again on launch.</div>
+            <div class="profile-actions" style="margin-top:12px">
+              <div class="select-wrap" style="min-width:190px">
+                <select id="settingsProfileSelect">
+                  ${getProfileNames().map(p => `<option value="${p}" ${p === currentProfile ? "selected" : ""}>${p}</option>`).join("")}
+                </select>
+              </div>
+              <button class="btn ghost small" id="settingsSwitchProfileBtn" type="button">Switch</button>
+              <button class="btn ghost small" id="settingsExitProfileBtn" type="button">Choose on launch</button>
+            </div>
           </div>
 
           <div class="settings-section">
@@ -1068,6 +1134,8 @@ if (!window.__ztrackerDelegatedFix) {
     const closeAssistant = e.target.closest("#closeAssistantBtn");
     const assistantBackdrop = e.target.id === "assistantModal";
     const resetBg = e.target.closest("#clearBgBtn");
+    const switchProfileBtn = e.target.closest("#settingsSwitchProfileBtn");
+    const exitProfileBtn = e.target.closest("#settingsExitProfileBtn");
 
     if (openSettings) {
       e.preventDefault();
@@ -1109,5 +1177,52 @@ if (!window.__ztrackerDelegatedFix) {
       render();
       return;
     }
+
+    if (switchProfileBtn) {
+      e.preventDefault();
+      const sel = document.getElementById("settingsProfileSelect");
+      if (sel && sel.value) chooseProfile(sel.value);
+      return;
+    }
+
+    if (exitProfileBtn) {
+      e.preventDefault();
+      currentProfile = null;
+      saveProfiles();
+      render();
+      return;
+    }
   });
 }
+
+function bindProfileLaunchEvents() {
+  document.querySelectorAll("[data-pick-profile]").forEach(btn => {
+    btn.addEventListener("click", () => chooseProfile(btn.dataset.pickProfile));
+  });
+  const createBtn = document.getElementById("createFirstProfileBtn");
+  if (createBtn) {
+    createBtn.addEventListener("click", () => {
+      const input = document.getElementById("newProfileName");
+      const name = (input?.value || "").trim();
+      if (!name) return alert("Please enter a profile name.");
+      if (getProfileNames().length >= 5) return alert("Max 5 profiles only");
+      if (!profiles[name]) profiles[name] = createEmptyProfile();
+      chooseProfile(name);
+    });
+  }
+}
+
+document.addEventListener("change", (e)=>{
+  if(e.target && e.target.id==="profileSelect"){
+    chooseProfile(e.target.value);
+  }
+});
+document.addEventListener("click", (e)=>{
+  if(e.target && e.target.id==="addProfileBtn"){
+    const name = prompt("Enter profile name");
+    if(!name) return;
+    if(getProfileNames().length>=5){ alert("Max 5 profiles only"); return; }
+    if(!profiles[name]) profiles[name] = createEmptyProfile();
+    chooseProfile(name);
+  }
+});
