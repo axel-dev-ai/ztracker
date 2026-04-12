@@ -594,10 +594,10 @@ function renderProfileLaunch() {
   const dropdownOpen = state?.launchDropdownOpen || false;
 
   const defaultControls = hasProfiles ? `
-    <div class="launch-stack">
+    <div class="launch-stack" style="margin-top:4px;">
       <div class="launch-dropdown">
         <button class="launch-action" type="button" id="launchProfileToggleBtn">
-          ${state?.pendingProfileOpen ? escapeHtml(state.pendingProfileOpen) : "PROFILE X"}
+          Choose Profile ▼
         </button>
         ${dropdownOpen ? `
           <div class="launch-dropdown-menu">
@@ -608,7 +608,7 @@ function renderProfileLaunch() {
       <button class="launch-action secondary" type="button" id="launchAddProfileBtn">ADD PROFILE</button>
     </div>
   ` : `
-    <div class="launch-stack">
+    <div class="launch-stack" style="margin-top:4px;">
       <button class="launch-action secondary" type="button" id="launchAddProfileBtn">ADD PROFILE</button>
     </div>
   `;
@@ -624,7 +624,7 @@ function renderProfileLaunch() {
   return `
     <div class="launch-shell">
       <div class="launch-panel">
-        <div class="launch-brand">
+        <div class="launch-brand" style="justify-content:center;">
           <div class="launch-brand-icon"><img src="icons/icon-192.png" alt="Ztracker icon" /></div>
           <h1>ZTracker</h1>
         </div>
@@ -639,7 +639,7 @@ function renderProfileLaunch() {
       <div id="launchConfirmModal" class="confirm-backdrop ${state?.pendingProfileOpen ? "show" : ""}">
         <div class="confirm-panel">
           <h3>Open Profile</h3>
-          <p>Open this profile ${state?.pendingProfileOpen ? `<strong>${escapeHtml(state.pendingProfileOpen)}</strong>` : ""}?</p>
+          <p>Open this profile ${state?.pendingProfileOpen ? `<strong>"${escapeHtml(state.pendingProfileOpen)}"</strong>` : ""}?</p>
           <div class="confirm-actions">
             <button class="btn ghost" type="button" id="cancelProfileOpenBtn">Cancel</button>
             <button class="btn" type="button" id="confirmProfileOpenBtn">Open</button>
