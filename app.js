@@ -1,6 +1,6 @@
 
-const APP_VERSION = "v17";
-const LAST_UPDATED = "2026-04-12 account transfer";
+const APP_VERSION = "v18";
+const LAST_UPDATED = "2026-04-13 floating chat";
 
 const STORAGE_KEY = "ztracker_data_v10";
 const PROFILE_KEY = "ztracker_profiles_v10";
@@ -97,6 +97,7 @@ const defaultState = {
   insightModal: null,
   assistantOpen: false,
   assistantMessages: [],
+  assistantUnread: 0,
   focusItem: null,
   launchMode: "default",
   launchDropdownOpen: false,
@@ -138,7 +139,8 @@ function loadProfileState(name) {
     avatarColor: stored.avatarColor || pickAvatarColor(name),
     avatarImage: stored.avatarImage || "",
     transfers: stored.transfers || [],
-    seenVersion: stored.seenVersion || ""
+    seenVersion: stored.seenVersion || "",
+    assistantUnread: stored.assistantUnread || 0
   };
 }
 function saveState() {
@@ -485,6 +487,8 @@ function askAssistant(question) {
   state.assistantMessages.push({ role: "user", text: q });
   const reply = state.aiMode === "online" ? smartOnlineStyleReply(q) : smartAssistantReply(q);
   state.assistantMessages.push({ role: "bot", text: reply });
+  const input = document.getElementById("assistantInput");
+  if (input) input.value = "";
   saveState();
   render();
 }
@@ -767,11 +771,18 @@ function ensureVersionNotice() {
     if (!Array.isArray(state.assistantMessages)) state.assistantMessages = [];
     state.assistantMessages.push({
       role: "bot",
-      text: `Update ${APP_VERSION}: Added account-to-account transfers and improved the app version info in Settings.`
+      text: `Update ${APP_VERSION}: Zed Bot is now a floating chat with an unread badge, and account transfers are available in Accounts.`
     });
+    if (!state.assistantOpen) state.assistantUnread = (state.assistantUnread || 0) + 1;
     state.seenVersion = APP_VERSION;
     saveState();
   }
+}
+
+
+function scrollAssistantToBottom() {
+  const el = document.getElementById("assistantMessages");
+  if (el) el.scrollTop = el.scrollHeight;
 }
 
 function render() {
@@ -1039,7 +1050,7 @@ function render() {
         </div>
       </div>
 
-      <button class="btn ai-fab" id="openAssistantFab" aria-label="Open AI assistant">💬</button>
+      <button class="btn ai-fab" id="openAssistantFab" aria-label="Open Zed Bot">💬${state.assistantUnread ? `<span class="ai-badge">${state.assistantUnread > 9 ? "9+" : state.assistantUnread}</span>` : ""}</button>
 
       <div id="settingsModal" class="settings-backdrop ${state.settingsOpen ? "show" : ""}">
         <div class="settings-panel">
@@ -1117,8 +1128,8 @@ function render() {
         </div>
       </div>
 
-      <div id="assistantModal" class="assistant-backdrop ${state.assistantOpen ? "show" : ""}">
-        <div class="assistant-panel">
+      <div id="assistantModal" class="assistant-window ${state.assistantOpen ? "show" : ""}">
+        <div class="assistant-panel floating">
           <div class="modal-header">
             <div>
               <div style="font-size:30px;font-weight:900">Zed Bot</div>
@@ -1140,7 +1151,7 @@ function render() {
             </div>
           </div>
 
-          <div class="assistant-messages">
+          <div class="assistant-messages" id="assistantMessages">
             ${(state.assistantMessages.length ? state.assistantMessages : [{ role:"bot", text:"Ask things like: How can I save money? Why are my expenses high? Do I have bills due soon?" }]).map(m => `
               <div class="assistant-bubble ${m.role === "user" ? "user" : "bot"}">
                 <div class="chat-row">
@@ -1149,7 +1160,7 @@ function render() {
                 </div>
               </div>`).join("")}
           </div>
-          <div style="display:grid;gap:10px;margin-top:12px">
+          <div class="assistant-footer" style="display:grid;gap:10px;margin-top:12px">
             <div class="assistant-input-row">
               <input id="assistantInput" placeholder="Ask Zed Bot anything about savings, budgeting, or bills" />
               <button class="btn" id="sendAssistantBtn" type="button">Send</button>
@@ -1179,6 +1190,7 @@ function render() {
   `;
   bindEvents();
   initEntryForm();
+  if (state.assistantOpen) setTimeout(scrollAssistantToBottom, 0);
   if (state.graphModal) {
     const canvas = document.getElementById("graphCanvas");
     if (canvas) drawLineChart(canvas, state.graphModal.points || []);
@@ -1311,8 +1323,8 @@ function bindEvents() {
   });
   document.getElementById("settingsExitProfileBtn")?.addEventListener("click", () => exitToProfilePicker());
 
-  document.getElementById("openAssistantFab")?.addEventListener("click", () => { state.assistantOpen = true; render(); });
-  document.getElementById("closeAssistantBtn")?.addEventListener("click", () => { state.assistantOpen = false; render(); });
+  document.getElementById("openAssistantFab")?.addEventListener("click", () => { state.assistantOpen = true; state.assistantUnread = 0; saveState(); render(); });
+  document.getElementById("closeAssistantBtn")?.addEventListener("click", () => { state.assistantOpen = false; saveState(); render(); });
   document.getElementById("setPrivateModeBtn")?.addEventListener("click", () => {
     state.aiMode = "private";
     saveState();
@@ -1350,8 +1362,7 @@ function bindEvents() {
     render();
   });
 
-  document.getElementById("assistantModal")?.addEventListener("click", e => { if (e.target.id === "assistantModal") { state.assistantOpen = false; render(); } });
-  document.getElementById("sendAssistantBtn")?.addEventListener("click", () => {
+    document.getElementById("sendAssistantBtn")?.addEventListener("click", () => {
     const input = document.getElementById("assistantInput");
     askAssistant(input?.value || "");
   });
