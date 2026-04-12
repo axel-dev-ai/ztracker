@@ -1,4 +1,7 @@
 
+const APP_VERSION = "v15";
+const LAST_UPDATED = "2026-04-12";
+
 const STORAGE_KEY = "ztracker_data_v10";
 const PROFILE_KEY = "ztracker_profiles_v10";
 const CURRENT_PROFILE_KEY = "ztracker_current_profile_v10";
@@ -1003,7 +1006,14 @@ function render() {
           </div>
 
           <div class="settings-section">
-            <h3>Profiles</h3>
+            
+          <div class="settings-section">
+            <h3>About Ztracker</h3>
+            <div class="muted">Version: <strong>${APP_VERSION}</strong></div>
+            <div class="muted">Last updated: ${LAST_UPDATED}</div>
+          </div>
+
+<h3>Profiles</h3>
             <div class="muted">Switch profiles here or choose again on launch.</div>
             <div class="profile-actions">
               <div class="select-wrap" style="min-width:190px">
