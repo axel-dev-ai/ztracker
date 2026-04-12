@@ -1,6 +1,6 @@
 
-const APP_VERSION = "v18";
-const LAST_UPDATED = "2026-04-13 floating chat";
+const APP_VERSION = "v19";
+const LAST_UPDATED = "2026-04-13 compact mode + height";
 
 const STORAGE_KEY = "ztracker_data_v10";
 const PROFILE_KEY = "ztracker_profiles_v10";
@@ -1138,17 +1138,13 @@ function render() {
             <button class="btn ghost" id="closeAssistantBtn">Close</button>
           </div>
 
-          <div class="settings-section" style="margin-top:0">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-              <div>
-                <div style="font-weight:800">Mode</div>
-                <div class="muted" style="margin-top:4px">${getAiModeLabel()}</div>
-              </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn ${state.aiMode === "private" ? "" : "ghost"} small" id="setPrivateModeBtn" type="button">Local</button>
-                <button class="btn ${state.aiMode === "online" ? "" : "ghost"} small" id="setOnlineModeBtn" type="button">Online</button>
-              </div>
+          <div class="assistant-mode-compact">
+            <div class="mode-row">
+              <span class="mode-label">Mode:</span>
+              <button class="btn ${state.aiMode === "private" ? "" : "ghost"} small" id="setPrivateModeBtn" type="button">Local</button>
+              <button class="btn ${state.aiMode === "online" ? "" : "ghost"} small" id="setOnlineModeBtn" type="button">Online</button>
             </div>
+            <div class="mode-hint">${getAiModeLabel()}</div>
           </div>
 
           <div class="assistant-messages" id="assistantMessages">
