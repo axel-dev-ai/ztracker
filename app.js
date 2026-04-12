@@ -66,12 +66,15 @@ const defaultState = {
   launchMode: "default",
   launchDropdownOpen: false,
   pendingProfileOpen: null,
-  aiMode: "private"
+  aiMode: "private",
+  avatarType: "color",
+  avatarColor: "#2563eb",
+  avatarImage: ""
 };
 
 let profiles = loadProfiles();
 let currentProfile = loadCurrentProfile();
-let state = currentProfile && profiles[currentProfile] ? loadProfileState(currentProfile) : createEmptyProfile();
+let state = currentProfile && profiles[currentProfile] ? loadProfileState(currentProfile) : createEmptyProfile("");
 let deferredPrompt = null;
 
 function loadProfiles() {
@@ -85,11 +88,36 @@ function loadProfiles() {
 function loadCurrentProfile() {
   return localStorage.getItem(CURRENT_PROFILE_KEY) || null;
 }
-function createEmptyProfile() {
-  return structuredClone(defaultState);
+const AVATAR_COLORS = ["#2563eb","#7c3aed","#16a34a","#ea580c","#db2777","#0891b2","#4f46e5","#dc2626"];
+
+function pickAvatarColor(name = "") {
+  const base = String(name || "");
+  let total = 0;
+  for (const ch of base) total += ch.charCodeAt(0);
+  return AVATAR_COLORS[total % AVATAR_COLORS.length];
+}
+function getProfileInitial(name = "") {
+  const trimmed = String(name || "").trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() : "U";
+}
+function createEmptyProfile(name = "") {
+  const fresh = structuredClone(defaultState);
+  fresh.avatarType = "color";
+  fresh.avatarColor = pickAvatarColor(name);
+  fresh.avatarImage = "";
+  return fresh;
+}
+function renderAvatar(name = "", profileState = state, size = 36) {
+  const type = profileState?.avatarType || "color";
+  const color = profileState?.avatarColor || pickAvatarColor(name);
+  const image = profileState?.avatarImage || "";
+  if (type === "image" && image) {
+    return `<div class="chat-avatar" style="width:${size}px;height:${size}px;background:#fff"><img src="${image}" alt="${escapeHtml(name)} avatar" /></div>`;
+  }
+  return `<div class="chat-avatar" style="width:${size}px;height:${size}px;background:${color}">${escapeHtml(getProfileInitial(name))}</div>`;
 }
 function loadProfileState(name) {
-  const stored = profiles[name] || createEmptyProfile();
+  const stored = profiles[name] || createEmptyProfile(name);
   return {
     ...structuredClone(defaultState),
     ...stored,
@@ -98,7 +126,10 @@ function loadProfileState(name) {
     insightModal: null,
     assistantOpen: false,
     focusItem: null,
-    aiMode: stored.aiMode || "private"
+    aiMode: stored.aiMode || "private",
+    avatarType: stored.avatarType || "color",
+    avatarColor: stored.avatarColor || pickAvatarColor(name),
+    avatarImage: stored.avatarImage || ""
   };
 }
 function saveState() {
@@ -117,7 +148,7 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persistState));
 }
 function chooseProfile(name) {
-  if (!profiles[name]) profiles[name] = createEmptyProfile();
+  if (!profiles[name]) profiles[name] = createEmptyProfile(name);
   currentProfile = name;
   state = loadProfileState(name);
   state.launchMode = "default";
@@ -365,13 +396,13 @@ function openInsight(type) {
 
 function getAiModeLabel() {
   return state.aiMode === "online"
-    ? "Online mode: only your message is sent."
-    : "Private by default. Online AI only sees your message.";
+    ? "Online mode only sends your message for broader help. Your stored app data is not sent."
+    : "Local mode keeps your data on this device. Because replies are generated locally, answers can be limited and some questions may not get a full response.";
 }
 function smartOnlineStyleReply(q) {
   const text = String(q || "").toLowerCase();
   if (text.includes("hi") || text.includes("hello") || text.includes("hey")) {
-    return "Hello! I'm Zed Bot. Online mode is active, but your app data still stays outside this reply flow.";
+    return "Hello! I'm Zed Bot. Online mode is active. Only the message you type is meant to be used here, not your stored app data.";
   }
   if (text.includes("budget")) {
     return "A simple budget tip: separate fixed bills first, then set a weekly limit for flexible spending.";
@@ -382,7 +413,7 @@ function smartOnlineStyleReply(q) {
   if (text.includes("debt") || text.includes("loan")) {
     return "Focus on due dates first, then reduce the most urgent or highest-cost debt when possible.";
   }
-  return "Online mode is best for general advice. For personal money analysis, private mode is safer because it keeps your data on your device.";
+  return "Online mode is best for general advice. For personal money analysis, local mode is safer because it keeps your data on your device.";
 }
 
 function smartAssistantReply(q) {
@@ -954,6 +985,24 @@ function render() {
           </div>
 
           <div class="settings-section">
+            <h3>Profile Avatar</h3>
+            <div class="avatar-preview-wrap">
+              ${renderAvatar(currentProfile || "User", state, 44)}
+              <div>
+                <div class="avatar-preview-label">${escapeHtml(currentProfile || "Current profile")}</div>
+                <div class="muted">Use a color by default or upload a profile photo.</div>
+              </div>
+            </div>
+            <div class="avatar-swatch-row">
+              ${AVATAR_COLORS.map(color => `<button class="avatar-swatch ${state.avatarType === "color" && state.avatarColor === color ? "active" : ""}" style="background:${color}" type="button" data-avatar-color="${color}" title="${color}"></button>`).join("")}
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input id="avatarImageInput" type="file" accept="image/*" />
+              <button class="btn ghost small" id="removeAvatarBtn" type="button">Remove Photo</button>
+            </div>
+          </div>
+
+          <div class="settings-section">
             <h3>Profiles</h3>
             <div class="muted">Switch profiles here or choose again on launch.</div>
             <div class="profile-actions">
@@ -995,22 +1044,28 @@ function render() {
           <div class="settings-section" style="margin-top:0">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
               <div>
-                <div style="font-weight:800">AI Mode</div>
+                <div style="font-weight:800">Mode</div>
                 <div class="muted" style="margin-top:4px">${getAiModeLabel()}</div>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn ${state.aiMode === "private" ? "" : "ghost"} small" id="setPrivateModeBtn" type="button">Private</button>
+                <button class="btn ${state.aiMode === "private" ? "" : "ghost"} small" id="setPrivateModeBtn" type="button">Local</button>
                 <button class="btn ${state.aiMode === "online" ? "" : "ghost"} small" id="setOnlineModeBtn" type="button">Online</button>
               </div>
             </div>
           </div>
 
           <div class="assistant-messages">
-            ${(state.assistantMessages.length ? state.assistantMessages : [{ role:"bot", text:"Ask things like: How can I save money? Why are my expenses high? Do I have bills due soon?" }]).map(m => `<div class="assistant-bubble ${m.role === "user" ? "user" : "bot"}"><strong>${m.role === "user" ? "You" : "AI"}:</strong> ${escapeHtml(m.text)}</div>`).join("")}
+            ${(state.assistantMessages.length ? state.assistantMessages : [{ role:"bot", text:"Ask things like: How can I save money? Why are my expenses high? Do I have bills due soon?" }]).map(m => `
+              <div class="assistant-bubble ${m.role === "user" ? "user" : "bot"}">
+                <div class="chat-row">
+                  ${m.role === "user" ? renderAvatar(currentProfile || "User", state, 34) : `<div class="chat-avatar" style="background:#0f172a;width:34px;height:34px"><img src="icons/icon-192.png" alt="Zed Bot avatar" /></div>`}
+                  <div class="chat-content"><strong>${m.role === "user" ? escapeHtml(currentProfile || "You") : "Zed Bot"}:</strong> ${escapeHtml(m.text)}</div>
+                </div>
+              </div>`).join("")}
           </div>
           <div style="display:grid;gap:10px;margin-top:12px">
-            <div class="inline">
-              <input id="assistantInput" placeholder="Ask a saving money related question" />
+            <div class="assistant-input-row">
+              <input id="assistantInput" placeholder="Ask Zed Bot anything about savings, budgeting, or bills" />
               <button class="btn" id="sendAssistantBtn" type="button">Send</button>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1075,7 +1130,7 @@ function bindProfileLaunchEvents() {
     const name = (input?.value || "").trim();
     if (!name) return alert("Please enter a profile name.");
     if (getProfileNames().length >= 5) return alert("Max 5 profiles only");
-    if (!profiles[name]) profiles[name] = createEmptyProfile();
+    if (!profiles[name]) profiles[name] = createEmptyProfile(name);
     chooseProfile(name);
   });
 
@@ -1137,7 +1192,7 @@ function bindEvents() {
     const name = prompt("Enter profile name");
     if (!name) return;
     if (getProfileNames().length >= 5) return alert("Max 5 profiles only");
-    if (!profiles[name]) profiles[name] = createEmptyProfile();
+    if (!profiles[name]) profiles[name] = createEmptyProfile(name);
     chooseProfile(name);
   });
 
@@ -1172,6 +1227,43 @@ function bindEvents() {
 
   document.getElementById("openAssistantFab")?.addEventListener("click", () => { state.assistantOpen = true; render(); });
   document.getElementById("closeAssistantBtn")?.addEventListener("click", () => { state.assistantOpen = false; render(); });
+  document.getElementById("setPrivateModeBtn")?.addEventListener("click", () => {
+    state.aiMode = "private";
+    saveState();
+    render();
+  });
+  document.getElementById("setOnlineModeBtn")?.addEventListener("click", () => {
+    state.aiMode = "online";
+    saveState();
+    render();
+  });
+  document.querySelectorAll("[data-avatar-color]").forEach(btn => btn.addEventListener("click", () => {
+    state.avatarType = "color";
+    state.avatarColor = btn.dataset.avatarColor;
+    state.avatarImage = "";
+    saveState();
+    render();
+  }));
+  document.getElementById("avatarImageInput")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      state.avatarType = "image";
+      state.avatarImage = String(reader.result || "");
+      saveState();
+      render();
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById("removeAvatarBtn")?.addEventListener("click", () => {
+    state.avatarType = "color";
+    state.avatarImage = "";
+    if (!state.avatarColor) state.avatarColor = pickAvatarColor(currentProfile || "");
+    saveState();
+    render();
+  });
+
   document.getElementById("assistantModal")?.addEventListener("click", e => { if (e.target.id === "assistantModal") { state.assistantOpen = false; render(); } });
   document.getElementById("sendAssistantBtn")?.addEventListener("click", () => {
     const input = document.getElementById("assistantInput");
