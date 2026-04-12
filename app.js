@@ -65,7 +65,8 @@ const defaultState = {
   focusItem: null,
   launchMode: "default",
   launchDropdownOpen: false,
-  pendingProfileOpen: null
+  pendingProfileOpen: null,
+  aiMode: "private"
 };
 
 let profiles = loadProfiles();
@@ -96,7 +97,8 @@ function loadProfileState(name) {
     graphModal: null,
     insightModal: null,
     assistantOpen: false,
-    focusItem: null
+    focusItem: null,
+    aiMode: stored.aiMode || "private"
   };
 }
 function saveState() {
@@ -360,6 +362,29 @@ function openInsight(type) {
   render();
 }
 
+
+function getAiModeLabel() {
+  return state.aiMode === "online"
+    ? "Online mode: only your message is sent."
+    : "Private by default. Online AI only sees your message.";
+}
+function smartOnlineStyleReply(q) {
+  const text = String(q || "").toLowerCase();
+  if (text.includes("hi") || text.includes("hello") || text.includes("hey")) {
+    return "Hello! I'm Zed Bot. Online mode is active, but your app data still stays outside this reply flow.";
+  }
+  if (text.includes("budget")) {
+    return "A simple budget tip: separate fixed bills first, then set a weekly limit for flexible spending.";
+  }
+  if (text.includes("save") || text.includes("saving")) {
+    return "Try saving a fixed amount as soon as income comes in. Even a small amount works if you stay consistent.";
+  }
+  if (text.includes("debt") || text.includes("loan")) {
+    return "Focus on due dates first, then reduce the most urgent or highest-cost debt when possible.";
+  }
+  return "Online mode is best for general advice. For personal money analysis, private mode is safer because it keeps your data on your device.";
+}
+
 function smartAssistantReply(q) {
   const text = q.toLowerCase();
   const m = computeMonth(state.selectedMonth);
@@ -388,7 +413,9 @@ function askAssistant(question) {
   const q = String(question || "").trim();
   if (!q) return;
   state.assistantMessages.push({ role: "user", text: q });
-  state.assistantMessages.push({ role: "bot", text: smartAssistantReply(q) });
+  const reply = state.aiMode === "online" ? smartOnlineStyleReply(q) : smartAssistantReply(q);
+  state.assistantMessages.push({ role: "bot", text: reply });
+  saveState();
   render();
 }
 
@@ -959,11 +986,25 @@ function render() {
         <div class="assistant-panel">
           <div class="modal-header">
             <div>
-              <div style="font-size:30px;font-weight:900">Smart AI Assistant</div>
-              <div class="muted">Offline money tips based on your current profile data</div>
+              <div style="font-size:30px;font-weight:900">Zed Bot</div>
+              <div class="muted">Private and helpful money guidance</div>
             </div>
             <button class="btn ghost" id="closeAssistantBtn">Close</button>
           </div>
+
+          <div class="settings-section" style="margin-top:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-weight:800">AI Mode</div>
+                <div class="muted" style="margin-top:4px">${getAiModeLabel()}</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn ${state.aiMode === "private" ? "" : "ghost"} small" id="setPrivateModeBtn" type="button">Private</button>
+                <button class="btn ${state.aiMode === "online" ? "" : "ghost"} small" id="setOnlineModeBtn" type="button">Online</button>
+              </div>
+            </div>
+          </div>
+
           <div class="assistant-messages">
             ${(state.assistantMessages.length ? state.assistantMessages : [{ role:"bot", text:"Ask things like: How can I save money? Why are my expenses high? Do I have bills due soon?" }]).map(m => `<div class="assistant-bubble ${m.role === "user" ? "user" : "bot"}"><strong>${m.role === "user" ? "You" : "AI"}:</strong> ${escapeHtml(m.text)}</div>`).join("")}
           </div>

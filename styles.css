@@ -292,3 +292,7 @@ input,select,textarea{border:1px solid var(--border);background:#fff;border-radi
 .launch-dropdown-item{
   font-size:16px !important;
 }
+
+.assistant-panel .settings-section .btn.small{
+  min-width:84px;
+}
