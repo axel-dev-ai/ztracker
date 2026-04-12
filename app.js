@@ -62,12 +62,15 @@ const defaultState = {
   insightModal: null,
   assistantOpen: false,
   assistantMessages: [],
-  focusItem: null
+  focusItem: null,
+  launchMode: "default",
+  launchDropdownOpen: false,
+  pendingProfileOpen: null
 };
 
 let profiles = loadProfiles();
 let currentProfile = loadCurrentProfile();
-let state = currentProfile && profiles[currentProfile] ? loadProfileState(currentProfile) : null;
+let state = currentProfile && profiles[currentProfile] ? loadProfileState(currentProfile) : createEmptyProfile();
 let deferredPrompt = null;
 
 function loadProfiles() {
@@ -115,12 +118,18 @@ function chooseProfile(name) {
   if (!profiles[name]) profiles[name] = createEmptyProfile();
   currentProfile = name;
   state = loadProfileState(name);
+  state.launchMode = "default";
+  state.launchDropdownOpen = false;
+  state.pendingProfileOpen = null;
   saveState();
   render();
 }
 function exitToProfilePicker() {
   currentProfile = null;
-  state = null;
+  state = createEmptyProfile();
+  state.launchMode = "default";
+  state.launchDropdownOpen = false;
+  state.pendingProfileOpen = null;
   localStorage.removeItem(CURRENT_PROFILE_KEY);
   render();
 }
@@ -577,43 +586,70 @@ function reminderCard(item) {
   </div>`;
 }
 
+
 function renderProfileLaunch() {
   const names = getProfileNames();
+  const hasProfiles = names.length > 0;
+  const launchMode = state?.launchMode || "default";
+  const dropdownOpen = state?.launchDropdownOpen || false;
+
+  const defaultControls = hasProfiles ? `
+    <div class="launch-stack">
+      <div class="launch-dropdown">
+        <button class="launch-action" type="button" id="launchProfileToggleBtn">
+          ${state?.pendingProfileOpen ? escapeHtml(state.pendingProfileOpen) : "PROFILE X"}
+        </button>
+        ${dropdownOpen ? `
+          <div class="launch-dropdown-menu">
+            ${names.map(name => `<button class="launch-dropdown-item" type="button" data-launch-profile="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("")}
+          </div>
+        ` : ""}
+      </div>
+      <button class="launch-action secondary" type="button" id="launchAddProfileBtn">ADD PROFILE</button>
+    </div>
+  ` : `
+    <div class="launch-stack">
+      <button class="launch-action secondary" type="button" id="launchAddProfileBtn">ADD PROFILE</button>
+    </div>
+  `;
+
+  const addProfileControls = `
+    <div class="launch-form">
+      <input id="launchNewProfileInput" placeholder="Enter profile name" />
+      <button class="launch-action secondary" type="button" id="launchSaveProfileBtn">ADD PROFILE</button>
+      <button class="btn ghost" type="button" id="launchCancelAddProfileBtn">Back</button>
+    </div>
+  `;
+
   return `
-    <div class="shell">
-      <div class="profile-launch">
-        <div class="profile-launch-header">
-          <div class="profile-launch-icon"><img src="icons/icon-192.png" alt="Ztracker icon" /></div>
-          <div class="profile-launch-title">
-            <h1>Ztracker</h1>
-            <p>Choose a profile to continue.</p>
-          </div>
+    <div class="launch-shell">
+      <div class="launch-panel">
+        <div class="launch-brand">
+          <div class="launch-brand-icon"><img src="icons/icon-192.png" alt="Ztracker icon" /></div>
+          <h1>ZTracker</h1>
         </div>
-        ${names.length ? `
-          <div class="profile-grid">
-            ${names.map(name => `
-              <button class="profile-card" type="button" data-pick-profile="${escapeHtml(name)}">
-                <h3>${escapeHtml(name)}</h3>
-                <p>Open this profile</p>
-              </button>
-            `).join("")}
-          </div>
-        ` : `
-          <div class="empty">
-            <div style="font-size:26px;font-weight:900">No profiles yet</div>
-            <div class="muted" style="margin-top:8px">Create your first profile to start using Ztracker.</div>
-          </div>
-        `}
-        <div class="profile-actions">
-          <div class="inline-input">
-            <input id="newProfileName" placeholder="Enter profile name" />
-            <button id="createFirstProfileBtn" class="btn" type="button">Add Profile</button>
+
+        <div class="launch-message">
+          WELCOME PLEASE CREATE OR CHOOSE A PROFILE
+        </div>
+
+        ${launchMode === "add" ? addProfileControls : defaultControls}
+      </div>
+
+      <div id="launchConfirmModal" class="confirm-backdrop ${state?.pendingProfileOpen ? "show" : ""}">
+        <div class="confirm-panel">
+          <h3>Open Profile</h3>
+          <p>Open this profile ${state?.pendingProfileOpen ? `<strong>${escapeHtml(state.pendingProfileOpen)}</strong>` : ""}?</p>
+          <div class="confirm-actions">
+            <button class="btn ghost" type="button" id="cancelProfileOpenBtn">Cancel</button>
+            <button class="btn" type="button" id="confirmProfileOpenBtn">Open</button>
           </div>
         </div>
       </div>
     </div>
   `;
 }
+
 function renderProfileSelectorInline() {
   return `
     <div class="header-profile-bar">
@@ -632,6 +668,10 @@ function render() {
   applyBackground();
 
   if (!currentProfile) {
+    state.settingsOpen = false;
+    state.assistantOpen = false;
+    state.graphModal = null;
+    state.insightModal = null;
     app.innerHTML = renderProfileLaunch();
     bindProfileLaunchEvents();
     return;
@@ -975,21 +1015,57 @@ function initEntryForm() {
   entryType.addEventListener("change", fillCats);
 }
 
+
 function bindProfileLaunchEvents() {
-  document.querySelectorAll("[data-pick-profile]").forEach(btn => {
-    btn.addEventListener("click", () => chooseProfile(btn.dataset.pickProfile));
+  document.getElementById("launchAddProfileBtn")?.addEventListener("click", () => {
+    state.launchMode = "add";
+    state.launchDropdownOpen = false;
+    state.pendingProfileOpen = null;
+    render();
   });
-  const createBtn = document.getElementById("createFirstProfileBtn");
-  if (createBtn) {
-    createBtn.addEventListener("click", () => {
-      const input = document.getElementById("newProfileName");
-      const name = (input?.value || "").trim();
-      if (!name) return alert("Please enter a profile name.");
-      if (getProfileNames().length >= 5) return alert("Max 5 profiles only");
-      if (!profiles[name]) profiles[name] = createEmptyProfile();
-      chooseProfile(name);
+
+  document.getElementById("launchCancelAddProfileBtn")?.addEventListener("click", () => {
+    state.launchMode = "default";
+    render();
+  });
+
+  document.getElementById("launchSaveProfileBtn")?.addEventListener("click", () => {
+    const input = document.getElementById("launchNewProfileInput");
+    const name = (input?.value || "").trim();
+    if (!name) return alert("Please enter a profile name.");
+    if (getProfileNames().length >= 5) return alert("Max 5 profiles only");
+    if (!profiles[name]) profiles[name] = createEmptyProfile();
+    chooseProfile(name);
+  });
+
+  document.getElementById("launchProfileToggleBtn")?.addEventListener("click", () => {
+    state.launchDropdownOpen = !state.launchDropdownOpen;
+    render();
+  });
+
+  document.querySelectorAll("[data-launch-profile]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.launchDropdownOpen = false;
+      state.pendingProfileOpen = btn.dataset.launchProfile;
+      render();
     });
-  }
+  });
+
+  document.getElementById("cancelProfileOpenBtn")?.addEventListener("click", () => {
+    state.pendingProfileOpen = null;
+    render();
+  });
+
+  document.getElementById("confirmProfileOpenBtn")?.addEventListener("click", () => {
+    if (state.pendingProfileOpen) chooseProfile(state.pendingProfileOpen);
+  });
+
+  document.getElementById("launchConfirmModal")?.addEventListener("click", e => {
+    if (e.target.id === "launchConfirmModal") {
+      state.pendingProfileOpen = null;
+      render();
+    }
+  });
 }
 
 function bindEvents() {
