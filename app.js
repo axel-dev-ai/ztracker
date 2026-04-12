@@ -1,11 +1,41 @@
 
-const APP_VERSION = "v15";
-const LAST_UPDATED = "2026-04-12";
+const APP_VERSION = "v16";
+const LAST_UPDATED = "2026-04-12 hotfix";
 
 const STORAGE_KEY = "ztracker_data_v10";
 const PROFILE_KEY = "ztracker_profiles_v10";
 const CURRENT_PROFILE_KEY = "ztracker_current_profile_v10";
 const BG_STORAGE_KEY = "ztracker_background_v10";
+
+const AVATAR_COLORS = ["#2563eb","#7c3aed","#16a34a","#ea580c","#db2777","#0891b2","#4f46e5","#dc2626"];
+
+function pickAvatarColor(name = "") {
+  const base = String(name || "");
+  let total = 0;
+  for (const ch of base) total += ch.charCodeAt(0);
+  return AVATAR_COLORS[total % AVATAR_COLORS.length];
+}
+function getProfileInitial(name = "") {
+  const trimmed = String(name || "").trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() : "U";
+}
+function createEmptyProfile(name = "") {
+  const fresh = structuredClone(defaultState);
+  fresh.avatarType = "color";
+  fresh.avatarColor = pickAvatarColor(name);
+  fresh.avatarImage = "";
+  return fresh;
+}
+function renderAvatar(name = "", profileState = state, size = 36) {
+  const type = profileState?.avatarType || "color";
+  const color = profileState?.avatarColor || pickAvatarColor(name);
+  const image = profileState?.avatarImage || "";
+  if (type === "image" && image) {
+    return `<div class="chat-avatar" style="width:${size}px;height:${size}px;background:#fff"><img src="${image}" alt="${escapeHtml(name)} avatar" /></div>`;
+  }
+  return `<div class="chat-avatar" style="width:${size}px;height:${size}px;background:${color}">${escapeHtml(getProfileInitial(name))}</div>`;
+}
+
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthKey = (date) => String(date).slice(0, 7);
@@ -90,34 +120,6 @@ function loadProfiles() {
 }
 function loadCurrentProfile() {
   return localStorage.getItem(CURRENT_PROFILE_KEY) || null;
-}
-const AVATAR_COLORS = ["#2563eb","#7c3aed","#16a34a","#ea580c","#db2777","#0891b2","#4f46e5","#dc2626"];
-
-function pickAvatarColor(name = "") {
-  const base = String(name || "");
-  let total = 0;
-  for (const ch of base) total += ch.charCodeAt(0);
-  return AVATAR_COLORS[total % AVATAR_COLORS.length];
-}
-function getProfileInitial(name = "") {
-  const trimmed = String(name || "").trim();
-  return trimmed ? trimmed.charAt(0).toUpperCase() : "U";
-}
-function createEmptyProfile(name = "") {
-  const fresh = structuredClone(defaultState);
-  fresh.avatarType = "color";
-  fresh.avatarColor = pickAvatarColor(name);
-  fresh.avatarImage = "";
-  return fresh;
-}
-function renderAvatar(name = "", profileState = state, size = 36) {
-  const type = profileState?.avatarType || "color";
-  const color = profileState?.avatarColor || pickAvatarColor(name);
-  const image = profileState?.avatarImage || "";
-  if (type === "image" && image) {
-    return `<div class="chat-avatar" style="width:${size}px;height:${size}px;background:#fff"><img src="${image}" alt="${escapeHtml(name)} avatar" /></div>`;
-  }
-  return `<div class="chat-avatar" style="width:${size}px;height:${size}px;background:${color}">${escapeHtml(getProfileInitial(name))}</div>`;
 }
 function loadProfileState(name) {
   const stored = profiles[name] || createEmptyProfile(name);
