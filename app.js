@@ -1,6 +1,6 @@
 
-const APP_VERSION = "v19";
-const LAST_UPDATED = "2026-04-13 compact mode + height";
+const APP_VERSION = "v20";
+const LAST_UPDATED = "2026-04-13 Puter online AI";
 
 const STORAGE_KEY = "ztracker_data_v10";
 const PROFILE_KEY = "ztracker_profiles_v10";
@@ -98,6 +98,7 @@ const defaultState = {
   assistantOpen: false,
   assistantMessages: [],
   assistantUnread: 0,
+  onlineBusy: false,
   focusItem: null,
   launchMode: "default",
   launchDropdownOpen: false,
@@ -140,7 +141,8 @@ function loadProfileState(name) {
     avatarImage: stored.avatarImage || "",
     transfers: stored.transfers || [],
     seenVersion: stored.seenVersion || "",
-    assistantUnread: stored.assistantUnread || 0
+    assistantUnread: stored.assistantUnread || 0,
+    onlineBusy: false
   };
 }
 function saveState() {
@@ -435,9 +437,28 @@ function openInsight(type) {
 }
 
 
+
+function canUsePuterOnline() {
+  return typeof window !== "undefined" && typeof window.puter !== "undefined" && !!window.puter.ai && typeof window.puter.ai.chat === "function";
+}
+async function askOnlineAI(question) {
+  if (!canUsePuterOnline()) {
+    throw new Error("Puter.js is not available.");
+  }
+  const response = await window.puter.ai.chat(question, { model: "gpt-4.1-nano" });
+  if (typeof response === "string") return response;
+  if (response?.message?.content?.[0]?.text) return response.message.content[0].text;
+  if (typeof response?.message?.content === "string") return response.message.content;
+  if (Array.isArray(response?.message?.content)) {
+    const firstText = response.message.content.find(x => x?.text)?.text;
+    if (firstText) return firstText;
+  }
+  return "I received a response, but I could not read it clearly.";
+}
+
 function getAiModeLabel() {
   return state.aiMode === "online"
-    ? "Online mode only sends your message for broader help. Your stored app data is not sent."
+    ? "Online mode sends only your typed message through Puter.js for broader help. Your stored app data is not sent."
     : "Local mode keeps your data on this device. Because replies are generated locally, answers can be limited and some questions may not get a full response.";
 }
 function smartOnlineStyleReply(q) {
@@ -481,14 +502,44 @@ function smartAssistantReply(q) {
   }
   return "Tip: review your monthly summary first, then check your top expense category and upcoming bills. That gives the fastest picture of where your money is going.";
 }
-function askAssistant(question) {
+async function askAssistant(question) {
   const q = String(question || "").trim();
   if (!q) return;
   state.assistantMessages.push({ role: "user", text: q });
-  const reply = state.aiMode === "online" ? smartOnlineStyleReply(q) : smartAssistantReply(q);
-  state.assistantMessages.push({ role: "bot", text: reply });
   const input = document.getElementById("assistantInput");
   if (input) input.value = "";
+
+  if (state.aiMode === "online") {
+    state.onlineBusy = true;
+    state.assistantMessages.push({ role: "bot", text: "Zed Bot is thinking..." });
+    saveState();
+    render();
+    try {
+      const reply = await askOnlineAI(q);
+      const last = state.assistantMessages[state.assistantMessages.length - 1];
+      if (last && last.role === "bot" && last.text === "Zed Bot is thinking...") {
+        last.text = reply;
+      } else {
+        state.assistantMessages.push({ role: "bot", text: reply });
+      }
+    } catch (error) {
+      const last = state.assistantMessages[state.assistantMessages.length - 1];
+      const fallback = "Online AI is unavailable right now. Try again later, or switch to Local mode.";
+      if (last && last.role === "bot" && last.text === "Zed Bot is thinking...") {
+        last.text = fallback;
+      } else {
+        state.assistantMessages.push({ role: "bot", text: fallback });
+      }
+    } finally {
+      state.onlineBusy = false;
+      saveState();
+      render();
+    }
+    return;
+  }
+
+  const reply = smartAssistantReply(q);
+  state.assistantMessages.push({ role: "bot", text: reply });
   saveState();
   render();
 }
@@ -1144,7 +1195,7 @@ function render() {
               <button class="btn ${state.aiMode === "private" ? "" : "ghost"} small" id="setPrivateModeBtn" type="button">Local</button>
               <button class="btn ${state.aiMode === "online" ? "" : "ghost"} small" id="setOnlineModeBtn" type="button">Online</button>
             </div>
-            <div class="mode-hint">${getAiModeLabel()}</div>
+            <div class="mode-hint">${getAiModeLabel()} ${state.aiMode === "online" ? "You may be asked by Puter to sign in." : ""}</div>
           </div>
 
           <div class="assistant-messages" id="assistantMessages">
@@ -1159,12 +1210,12 @@ function render() {
           <div class="assistant-footer" style="display:grid;gap:10px;margin-top:12px">
             <div class="assistant-input-row">
               <input id="assistantInput" placeholder="Ask Zed Bot anything about savings, budgeting, or bills" />
-              <button class="btn" id="sendAssistantBtn" type="button">Send</button>
+              <button class="btn" id="sendAssistantBtn" type="button" ${state.onlineBusy ? "disabled" : ""}>${state.onlineBusy ? "..." : "Send"}</button>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn ghost small assistant-suggestion" type="button" data-q="How can I save money?">How can I save money?</button>
-              <button class="btn ghost small assistant-suggestion" type="button" data-q="Why are my expenses high?">Why are my expenses high?</button>
-              <button class="btn ghost small assistant-suggestion" type="button" data-q="Do I have bills due soon?">Do I have bills due soon?</button>
+              <button class="btn ghost small assistant-suggestion" type="button" data-q="How can I save money?" ${state.onlineBusy ? "disabled" : ""}>How can I save money?</button>
+              <button class="btn ghost small assistant-suggestion" type="button" data-q="Why are my expenses high?" ${state.onlineBusy ? "disabled" : ""}>Why are my expenses high?</button>
+              <button class="btn ghost small assistant-suggestion" type="button" data-q="Do I have bills due soon?" ${state.onlineBusy ? "disabled" : ""}>Do I have bills due soon?</button>
             </div>
           </div>
         </div>
@@ -1328,6 +1379,10 @@ function bindEvents() {
   });
   document.getElementById("setOnlineModeBtn")?.addEventListener("click", () => {
     state.aiMode = "online";
+    if (!state.assistantMessages.some(m => m.role === "bot" && String(m.text).includes("Puter.js"))) {
+      state.assistantMessages.push({ role: "bot", text: "Online mode uses Puter.js real AI. Only the message you type is sent, not your stored app data." });
+      if (!state.assistantOpen) state.assistantUnread = (state.assistantUnread || 0) + 1;
+    }
     saveState();
     render();
   });

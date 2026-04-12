@@ -428,3 +428,5 @@ input,select,textarea{border:1px solid var(--border);background:#fff;border-radi
   margin-top:4px;
   line-height:1.2;
 }
+
+button:disabled{opacity:.65;cursor:not-allowed}
