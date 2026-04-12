@@ -1,6 +1,6 @@
 
-const APP_VERSION = "v16";
-const LAST_UPDATED = "2026-04-12 hotfix";
+const APP_VERSION = "v17";
+const LAST_UPDATED = "2026-04-12 account transfer";
 
 const STORAGE_KEY = "ztracker_data_v10";
 const PROFILE_KEY = "ztracker_profiles_v10";
@@ -85,7 +85,9 @@ const defaultState = {
   bills: [],
   savings: [],
   accounts: [],
+  transfers: [],
   budgets: [],
+  seenVersion: "",
   expenseCategories: ["Food","Transport","Utilities","Rent","Shopping","Health","School","Other"],
   incomeCategories: ["Salary","Allowance","Side Job","Freelance","Gift","Other"],
   billCategories: ["Utility","Loan","Subscription","Rent","School","Other"],
@@ -134,7 +136,9 @@ function loadProfileState(name) {
     aiMode: stored.aiMode || "private",
     avatarType: stored.avatarType || "color",
     avatarColor: stored.avatarColor || pickAvatarColor(name),
-    avatarImage: stored.avatarImage || ""
+    avatarImage: stored.avatarImage || "",
+    transfers: stored.transfers || [],
+    seenVersion: stored.seenVersion || ""
   };
 }
 function saveState() {
@@ -263,6 +267,35 @@ function computeMonth(selectedMonth = state.selectedMonth || monthKey(todayISO()
 
   return { selectedMonth, monthEntries, monthSavings, monthBills, monthlyIncome, monthlyExpenses, monthlySavings, paidBills, unpaidBills, remainingBalance, weekly };
 }
+
+function recentTransferItems() {
+  return state.transfers.map(x => ({
+    ...x,
+    section: "transfers",
+    type: "transfer",
+    date: x.date,
+    displayTitle: `${x.fromName} → ${x.toName}`,
+    amount: x.amount,
+    note: x.note || ""
+  }));
+}
+function accountOptionList(selected = "") {
+  return state.accounts.map(a => `<option value="${a.id}" ${a.id === selected ? "selected" : ""}>${escapeHtml(a.name)}</option>`).join("");
+}
+function transferCard(item) {
+  return `<div class="history-item" data-card-id="${item.id}">
+    <div class="row">
+      <div>
+        <h4>${escapeHtml(item.fromName)} → ${escapeHtml(item.toName)} <span class="badge account">transfer</span></h4>
+        <div class="muted" style="margin-top:8px">${item.date}</div>
+        ${item.note ? `<div class="muted">${escapeHtml(item.note)}</div>` : ""}
+      </div>
+      <div style="text-align:right">
+        <div class="text-purple" style="font-size:28px;font-weight:900">${peso.format(item.amount)}</div>
+      </div>
+    </div>
+  </div>`;
+}
 function totalAccountBalance() {
   return state.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0);
 }
@@ -271,7 +304,8 @@ function recentItems() {
     ...state.entries.map(x => ({ ...x, section:"entries", displayTitle:x.label })),
     ...state.bills.map(x => ({ ...x, section:"bills", type:"bill", date:x.dueDate, displayTitle:x.name })),
     ...state.savings.map(x => ({ ...x, section:"savings", type:"saving", date:x.date, displayTitle:x.label })),
-    ...state.accounts.map(x => ({ ...x, section:"accounts", type:"account", date:todayISO(), displayTitle:x.name, amount:x.balance }))
+    ...state.accounts.map(x => ({ ...x, section:"accounts", type:"account", date:todayISO(), displayTitle:x.name, amount:x.balance })),
+    ...recentTransferItems()
   ].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 8);
 }
 function reminderItems() {
@@ -627,7 +661,7 @@ function recentCard(item) {
         <div style="font-size:28px;font-weight:900">${item.amount !== undefined ? peso.format(Number(item.amount)) : ""}</div>
         <div class="actions">
           ${item.section === "bills" ? `<button class="btn ghost small toggle-bill-btn" data-id="${item.id}">Toggle</button>` : ""}
-          <button class="btn ghost small delete-btn" data-section="${item.section}" data-id="${item.id}">Delete</button>
+          ${item.section !== "transfers" ? `<button class="btn ghost small delete-btn" data-section="${item.section}" data-id="${item.id}">Delete</button>` : ""}
         </div>
       </div>
     </div>
@@ -726,6 +760,20 @@ function renderProfileSelectorInline() {
   `;
 }
 
+
+function ensureVersionNotice() {
+  if (!state || !currentProfile) return;
+  if (state.seenVersion !== APP_VERSION) {
+    if (!Array.isArray(state.assistantMessages)) state.assistantMessages = [];
+    state.assistantMessages.push({
+      role: "bot",
+      text: `Update ${APP_VERSION}: Added account-to-account transfers and improved the app version info in Settings.`
+    });
+    state.seenVersion = APP_VERSION;
+    saveState();
+  }
+}
+
 function render() {
   const app = document.getElementById("app");
   applyBackground();
@@ -740,6 +788,7 @@ function render() {
     return;
   }
 
+  ensureVersionNotice();
   ensureRecurringBills();
   const m = computeMonth();
   const entriesFiltered = state.entryFilter === "all" ? m.monthEntries : m.monthEntries.filter(x => x.type === state.entryFilter);
@@ -927,21 +976,46 @@ function render() {
               <div class="three-col" style="margin-bottom:18px">
                 <div class="week-item"><div style="font-size:24px;font-weight:900">Total Account Balance</div><div class="text-purple" style="font-size:30px;font-weight:900;margin-top:8px">${peso.format(totalAccountBalance())}</div></div>
                 <div class="week-item"><div style="font-size:24px;font-weight:900">Accounts</div><div style="font-size:30px;font-weight:900;margin-top:8px">${state.accounts.length}</div></div>
-                <div class="week-item"><div style="font-size:24px;font-weight:900">Examples</div><div class="muted" style="margin-top:8px">GCash 1, GCash 2, UnionBank</div></div>
+                <div class="week-item"><div style="font-size:24px;font-weight:900">Transfers</div><div style="font-size:30px;font-weight:900;margin-top:8px">${state.transfers.length}</div></div>
               </div>
-              <div class="field-grid">
-                <div class="field"><label>Account Name</label><input id="accountName" placeholder="e.g. GCash 1" /></div>
-                <div class="field"><label>Balance</label><input id="accountBalance" type="number" placeholder="0.00" /></div>
-                <div class="field"><label>Type</label><select id="accountType">${state.accountTypes.map(t => `<option>${escapeHtml(t)}</option>`).join("")}</select></div>
-                <div class="field"><label>Add Custom Type</label><div class="inline"><input id="newAccountType" placeholder="New type" /><button class="btn ghost small" id="addAccountTypeBtn">Add</button></div></div>
-                <div class="field full"><label>Note</label><input id="accountNote" placeholder="Optional note" /></div>
-                <div class="field full"><button class="btn" id="saveAccountBtn">Add Account</button></div>
+
+              <div class="two-col">
+                <div class="panel"><div class="panel-body">
+                  <h3 style="font-size:32px;margin:0 0 14px 0">Add Account</h3>
+                  <div class="field-grid">
+                    <div class="field"><label>Account Name</label><input id="accountName" placeholder="e.g. GCash 1" /></div>
+                    <div class="field"><label>Balance</label><input id="accountBalance" type="number" placeholder="0.00" /></div>
+                    <div class="field"><label>Type</label><select id="accountType">${state.accountTypes.map(t => `<option>${escapeHtml(t)}</option>`).join("")}</select></div>
+                    <div class="field"><label>Add Custom Type</label><div class="inline"><input id="newAccountType" placeholder="New type" /><button class="btn ghost small" id="addAccountTypeBtn">Add</button></div></div>
+                    <div class="field full"><label>Note</label><input id="accountNote" placeholder="Optional note" /></div>
+                    <div class="field full"><button class="btn" id="saveAccountBtn">Add Account</button></div>
+                  </div>
+                </div></div>
+
+                <div class="panel"><div class="panel-body">
+                  <h3 style="font-size:32px;margin:0 0 14px 0">Transfer Between Accounts</h3>
+                  ${state.accounts.length >= 2 ? `
+                    <div class="field-grid">
+                      <div class="field"><label>From</label><select id="transferFrom">${accountOptionList()}</select></div>
+                      <div class="field"><label>To</label><select id="transferTo">${accountOptionList()}</select></div>
+                      <div class="field"><label>Amount</label><input id="transferAmount" type="number" placeholder="0.00" /></div>
+                      <div class="field"><label>Date</label><input id="transferDate" type="date" value="${todayISO()}" /></div>
+                      <div class="field full"><label>Note</label><input id="transferNote" placeholder="Optional note" /></div>
+                      <div class="field full"><button class="btn" id="saveTransferBtn">Transfer</button></div>
+                    </div>
+                  ` : emptyHtml("Need at least 2 accounts","Add two or more accounts to transfer money between them.")}
+                </div></div>
               </div>
+
               <div class="panel" style="margin-top:18px"><div class="panel-body">
                 <h3 style="font-size:32px;margin:0 0 14px 0">Saved Accounts</h3>
                 <div class="stack">${state.accounts.length ? state.accounts.map(accountCard).join("") : emptyHtml("No accounts yet","Add your first GCash, bank, or cash balance.")}</div>
               </div></div>
-            </section>
+
+              <div class="panel" style="margin-top:18px"><div class="panel-body">
+                <h3 style="font-size:32px;margin:0 0 14px 0">Transfer History</h3>
+                <div class="stack">${state.transfers.length ? state.transfers.map(transferCard).join("") : emptyHtml("No transfers yet","Transfers between your own accounts will appear here.")}</div>
+              </div></div></section>
 
             <section class="section ${state.activeTab === "budgets" ? "active" : ""}">
               <h2 class="panel-title">Budgets</h2>
@@ -1349,6 +1423,38 @@ function bindEvents() {
     state.savings.unshift({ id: crypto.randomUUID(), date, amount, label, note });
     saveState(); render();
   });
+
+  document.getElementById("saveTransferBtn")?.addEventListener("click", () => {
+    const fromId = document.getElementById("transferFrom").value;
+    const toId = document.getElementById("transferTo").value;
+    const amount = Number(document.getElementById("transferAmount").value);
+    const date = document.getElementById("transferDate").value;
+    const note = document.getElementById("transferNote").value.trim();
+    if (!fromId || !toId || !amount) return alert("Please complete the transfer fields.");
+    if (fromId === toId) return alert("Choose two different accounts.");
+    const fromAccount = state.accounts.find(a => a.id === fromId);
+    const toAccount = state.accounts.find(a => a.id === toId);
+    if (!fromAccount || !toAccount) return alert("Selected account not found.");
+    if (Number(fromAccount.balance) < amount) return alert("Not enough balance in the source account.");
+    state.accounts = state.accounts.map(a => {
+      if (a.id === fromId) return { ...a, balance: Number(a.balance) - amount };
+      if (a.id === toId) return { ...a, balance: Number(a.balance) + amount };
+      return a;
+    });
+    state.transfers.unshift({
+      id: crypto.randomUUID(),
+      fromId,
+      toId,
+      fromName: fromAccount.name,
+      toName: toAccount.name,
+      amount,
+      date,
+      note
+    });
+    saveState();
+    render();
+  });
+
   document.getElementById("saveAccountBtn")?.addEventListener("click", () => {
     const name = document.getElementById("accountName").value.trim();
     const balance = Number(document.getElementById("accountBalance").value);
