@@ -430,3 +430,43 @@ input,select,textarea{border:1px solid var(--border);background:#fff;border-radi
 }
 
 button:disabled{opacity:.65;cursor:not-allowed}
+
+.account-panels{
+  grid-template-columns: 1fr;
+}
+.transfer-grid{
+  grid-template-columns: 1fr 1fr;
+}
+.custom-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.custom-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  border:1px solid var(--border);
+  background:#fff;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:13px;
+}
+.chip-remove-btn{
+  border:none;
+  background:transparent;
+  color:#dc2626;
+  font-weight:700;
+  cursor:pointer;
+}
+@media (min-width: 1180px){
+  .account-panels{
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 720px){
+  .transfer-grid{
+    grid-template-columns: 1fr;
+  }
+}

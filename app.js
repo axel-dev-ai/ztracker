@@ -1,5 +1,5 @@
 
-const APP_VERSION = "v20";
+const APP_VERSION = "v21";
 const LAST_UPDATED = "2026-04-13 Puter online AI";
 
 const STORAGE_KEY = "ztracker_data_v10";
@@ -76,6 +76,12 @@ function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
 
+
+const DEFAULT_EXPENSE_CATEGORIES = ["Food","Transport","Utilities","Rent","Shopping","Health","School","Other"];
+const DEFAULT_INCOME_CATEGORIES = ["Salary","Allowance","Side Job","Freelance","Gift","Other"];
+const DEFAULT_BILL_CATEGORIES = ["Utility","Loan","Subscription","Rent","School","Other"];
+const DEFAULT_ACCOUNT_TYPES = ["E-wallet","Bank","Cash","Savings","Other"];
+
 const defaultState = {
   selectedMonth: monthKey(todayISO()),
   activeTab: "home",
@@ -88,10 +94,10 @@ const defaultState = {
   transfers: [],
   budgets: [],
   seenVersion: "",
-  expenseCategories: ["Food","Transport","Utilities","Rent","Shopping","Health","School","Other"],
-  incomeCategories: ["Salary","Allowance","Side Job","Freelance","Gift","Other"],
-  billCategories: ["Utility","Loan","Subscription","Rent","School","Other"],
-  accountTypes: ["E-wallet","Bank","Cash","Savings","Other"],
+  expenseCategories: [...DEFAULT_EXPENSE_CATEGORIES],
+  incomeCategories: [...DEFAULT_INCOME_CATEGORIES],
+  billCategories: [...DEFAULT_BILL_CATEGORIES],
+  accountTypes: [...DEFAULT_ACCOUNT_TYPES],
   settingsOpen: false,
   graphModal: null,
   insightModal: null,
@@ -617,6 +623,25 @@ function closeGraph() {
   render();
 }
 
+
+function customOnly(allItems, defaults) {
+  return allItems.filter(item => !defaults.includes(item));
+}
+function removableCustomList(items, defaults, keyName) {
+  const customs = customOnly(items, defaults);
+  if (!customs.length) return "";
+  return `
+    <div class="custom-list">
+      ${customs.map(item => `
+        <div class="custom-chip">
+          <span>${escapeHtml(item)}</span>
+          <button type="button" class="chip-remove-btn" data-remove-key="${keyName}" data-remove-value="${escapeHtml(item)}">Remove</button>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
 function summaryCard(title, value, hint, iconType, tint, card) {
   return `<button class="sum-card ${tint}" type="button" data-card="${card}">
     <div class="sum-inner">
@@ -908,7 +933,7 @@ function render() {
 
             <section class="section ${state.activeTab === "home" ? "active" : ""}">
               <h2 class="panel-title">Home</h2>
-              <div class="two-col">
+              <div class="two-col account-panels">
                 <div class="card-box">
                   <h3>Weekly Summary</h3>
                   <div class="week-grid">
@@ -969,7 +994,7 @@ function render() {
                 <div class="field"><label>Type</label><select id="entryType"><option value="income">Income</option><option value="expense">Expense</option></select></div>
                 <div class="field"><label>Date</label><input id="entryDate" type="date" value="${todayISO()}" /></div>
                 <div class="field"><label>Category</label><select id="entryCategory"></select></div>
-                <div class="field"><label>Add Custom Category</label><div class="inline"><input id="newEntryCategory" placeholder="New category" /><button class="btn ghost small" id="addEntryCategoryBtn">Add</button></div></div>
+                <div class="field"><label>Add Custom Category</label><div class="inline"><input id="newEntryCategory" placeholder="New category" /><button class="btn ghost small" id="addEntryCategoryBtn">Add</button></div><div class="muted" style="margin-top:8px">Income custom</div>${removableCustomList(state.incomeCategories, DEFAULT_INCOME_CATEGORIES, "incomeCategories")}<div class="muted" style="margin-top:8px">Expense custom</div>${removableCustomList(state.expenseCategories, DEFAULT_EXPENSE_CATEGORIES, "expenseCategories")}</div>
                 <div class="field"><label>Label</label><input id="entryLabel" placeholder="e.g. Salary, Grocery" /></div>
                 <div class="field"><label>Amount</label><input id="entryAmount" type="number" placeholder="0.00" /></div>
                 <div class="field full"><label>Notes</label><input id="entryNote" placeholder="Optional notes" /></div>
@@ -998,7 +1023,7 @@ function render() {
                 <div class="field"><label>Due Date</label><input id="billDueDate" type="date" value="${todayISO()}" /></div>
                 <div class="field"><label>Status</label><select id="billStatus"><option>Unpaid</option><option>Paid</option></select></div>
                 <div class="field"><label>Category</label><select id="billCategory">${state.billCategories.map(c => `<option>${escapeHtml(c)}</option>`).join("")}</select></div>
-                <div class="field"><label>Add Custom Bill Category</label><div class="inline"><input id="newBillCategory" placeholder="New bill category" /><button class="btn ghost small" id="addBillCategoryBtn">Add</button></div></div>
+                <div class="field"><label>Add Custom Bill Category</label><div class="inline"><input id="newBillCategory" placeholder="New bill category" /><button class="btn ghost small" id="addBillCategoryBtn">Add</button></div>${removableCustomList(state.billCategories, DEFAULT_BILL_CATEGORIES, "billCategories")}</div>
                 <div class="field full"><label>Note</label><input id="billNote" placeholder="Optional note" /></div>
                 <div class="field"><label>Recurring monthly?</label><select id="billRecurring"><option value="false">No</option><option value="true">Yes</option></select></div>
                 <div class="field"><label>&nbsp;</label><button class="btn" id="saveBillBtn">Add Bill</button></div>
@@ -1041,14 +1066,14 @@ function render() {
                 <div class="week-item"><div style="font-size:24px;font-weight:900">Transfers</div><div style="font-size:30px;font-weight:900;margin-top:8px">${state.transfers.length}</div></div>
               </div>
 
-              <div class="two-col">
+              <div class="two-col account-panels">
                 <div class="panel"><div class="panel-body">
                   <h3 style="font-size:32px;margin:0 0 14px 0">Add Account</h3>
                   <div class="field-grid">
                     <div class="field"><label>Account Name</label><input id="accountName" placeholder="e.g. GCash 1" /></div>
                     <div class="field"><label>Balance</label><input id="accountBalance" type="number" placeholder="0.00" /></div>
                     <div class="field"><label>Type</label><select id="accountType">${state.accountTypes.map(t => `<option>${escapeHtml(t)}</option>`).join("")}</select></div>
-                    <div class="field"><label>Add Custom Type</label><div class="inline"><input id="newAccountType" placeholder="New type" /><button class="btn ghost small" id="addAccountTypeBtn">Add</button></div></div>
+                    <div class="field"><label>Add Custom Type</label><div class="inline"><input id="newAccountType" placeholder="New type" /><button class="btn ghost small" id="addAccountTypeBtn">Add</button></div>${removableCustomList(state.accountTypes, DEFAULT_ACCOUNT_TYPES, "accountTypes")}</div>
                     <div class="field full"><label>Note</label><input id="accountNote" placeholder="Optional note" /></div>
                     <div class="field full"><button class="btn" id="saveAccountBtn">Add Account</button></div>
                   </div>
@@ -1057,7 +1082,7 @@ function render() {
                 <div class="panel"><div class="panel-body">
                   <h3 style="font-size:32px;margin:0 0 14px 0">Transfer Between Accounts</h3>
                   ${state.accounts.length >= 2 ? `
-                    <div class="field-grid">
+                    <div class="field-grid transfer-grid">
                       <div class="field"><label>From</label><select id="transferFrom">${accountOptionList()}</select></div>
                       <div class="field"><label>To</label><select id="transferTo">${accountOptionList()}</select></div>
                       <div class="field"><label>Amount</label><input id="transferAmount" type="number" placeholder="0.00" /></div>
@@ -1542,6 +1567,23 @@ function bindEvents() {
     else state.budgets.unshift({ id: crypto.randomUUID(), month, category, limit });
     saveState(); render();
   });
+
+
+  document.querySelectorAll(".chip-remove-btn").forEach(btn => btn.addEventListener("click", () => {
+    const key = btn.dataset.removeKey;
+    const value = btn.dataset.removeValue;
+    if (!key || !value) return;
+    const defaultsMap = {
+      incomeCategories: DEFAULT_INCOME_CATEGORIES,
+      expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
+      billCategories: DEFAULT_BILL_CATEGORIES,
+      accountTypes: DEFAULT_ACCOUNT_TYPES
+    };
+    if ((defaultsMap[key] || []).includes(value)) return;
+    state[key] = (state[key] || []).filter(item => item !== value);
+    saveState();
+    render();
+  }));
 
   document.querySelectorAll(".delete-btn").forEach(btn => btn.addEventListener("click", () => {
     const section = btn.dataset.section;
